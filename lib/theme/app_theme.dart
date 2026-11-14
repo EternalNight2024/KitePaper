@@ -5,6 +5,7 @@ abstract final class AppTheme {
 
   static ThemeData get light => ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: _seedColor),
+        scaffoldBackgroundColor: Colors.transparent,
       );
 
   static ThemeData get dark => ThemeData(
@@ -12,5 +13,6 @@ abstract final class AppTheme {
           seedColor: _seedColor,
           brightness: Brightness.dark,
         ),
+        scaffoldBackgroundColor: Colors.transparent,
       );
 }

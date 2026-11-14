@@ -1,6 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 
-import 'features/home/home_page.dart';
+import 'features/shell.dart';
 import 'theme/app_theme.dart';
 
 class KitePaperApp extends StatelessWidget {
@@ -13,7 +13,8 @@ class KitePaperApp extends StatelessWidget {
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
       themeMode: ThemeMode.system,
-      home: const HomePage(),
+      debugShowCheckedModeBanner: false,
+      home: const AppShell(),
     );
   }
 }
