@@ -1,5 +1,4 @@
-import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
-import 'package:material_ui/material_ui.dart';
+import 'package:flutter/material.dart';
 
 import '../core/models.dart';
 import '../core/store.dart';
@@ -20,7 +19,7 @@ class _QuestionEditorPageState extends State<QuestionEditorPage> {
   final _knowledge = TextEditingController();
   final _analysis = TextEditingController();
   QuestionType _type = QuestionType.single;
-  String _message = '';
+  String? _message;
 
   @override
   void dispose() {
@@ -73,90 +72,106 @@ class _QuestionEditorPageState extends State<QuestionEditorPage> {
 
   @override
   Widget build(BuildContext context) {
-    return GlassScaffold(
-      background: glassBackground(Theme.of(context).brightness),
-      appBar: GlassAppBar(
-        title: const Text('新增题目'),
-        actions: [
-          GlassIconButton(icon: const Icon(Icons.save), onPressed: _save),
-        ],
+    final theme = Theme.of(context);
+    return GlassPageScaffold(
+      title: '新增题目',
+      action: GlassButton(
+        label: '保存',
+        compact: true,
+        onPressed: _save,
       ),
-      body: ListView(
-        padding: pagePadding,
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(18, 4, 18, 32),
         children: [
-          GlassGroupedSection(
-            surfaceStyle: GlassSurfaceStyle.solid,
-            header: const Text('题型'),
+          sectionHeader(context, '题型'),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
             children: [
-              GlassListTile(
-                title: DropdownButton<QuestionType>(
-                  value: _type,
-                  isExpanded: true,
-                  items: QuestionType.values
-                      .map((type) => DropdownMenuItem(
-                            value: type,
-                            child: Text(type.label),
-                          ))
-                      .toList(),
-                  onChanged: (value) =>
-                      setState(() => _type = value ?? QuestionType.single),
+              for (final type in QuestionType.values)
+                GlassChip(
+                  label: type.label,
+                  selected: _type == type,
+                  onTap: () => setState(() => _type = type),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          GlassGroupedSection(
-            surfaceStyle: GlassSurfaceStyle.solid,
-            header: const Text('题目内容'),
-            children: [
-              GlassListTile(
-                title: GlassTextField(
-                  controller: _stem,
-                  placeholder: '题干',
-                  maxLines: 3,
-                ),
-              ),
-              if (_type.hasOptions)
-                GlassListTile(
-                  title: GlassTextField(
-                    controller: _options,
-                    placeholder: '选项，用 | 分隔',
-                  ),
-                ),
-              GlassListTile(
-                title: GlassTextField(
-                  controller: _answers,
-                  placeholder: '答案，选择题填 A 或 A|C',
-                ),
-              ),
-              GlassListTile(
-                title: GlassTextField(
-                  controller: _score,
-                  placeholder: '分值',
-                  keyboardType: TextInputType.number,
-                ),
-              ),
-              GlassListTile(
-                title: GlassTextField(
-                  controller: _knowledge,
-                  placeholder: '知识点',
-                ),
-              ),
-              GlassListTile(
-                title: GlassTextField(
-                  controller: _analysis,
-                  placeholder: '解析',
-                ),
-              ),
             ],
           ),
           const SizedBox(height: 20),
-          GlassButton.custom(
-            height: 50,
-            onTap: _save,
-            child: const Text('保存到本地题库'),
+          sectionHeader(context, '题目内容'),
+          GlassPanel(
+            heavy: true,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                GlassField(
+                  controller: _stem,
+                  label: '题干',
+                  hint: '输入题目描述',
+                  maxLines: 3,
+                ),
+                if (_type.hasOptions) ...[
+                  const SizedBox(height: 14),
+                  GlassField(
+                    controller: _options,
+                    label: '选项（用 | 分隔）',
+                    hint: '例如：Widget|Activity|ViewController',
+                  ),
+                ],
+                const SizedBox(height: 14),
+                GlassField(
+                  controller: _answers,
+                  label: '答案（选择题填 A 或 A|C）',
+                  hint: 'A',
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: GlassField(
+                        controller: _score,
+                        label: '分值',
+                        keyboardType: TextInputType.number,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: GlassField(
+                        controller: _knowledge,
+                        label: '知识点',
+                        hint: '选填',
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                GlassField(
+                  controller: _analysis,
+                  label: '解析',
+                  hint: '选填',
+                  maxLines: 2,
+                ),
+              ],
+            ),
           ),
-          if (_message.isNotEmpty) statusMessage(_message),
+          if (_message != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: GlassBanner(message: _message!, isError: true),
+            ),
+          const SizedBox(height: 24),
+          GlassButton(
+            label: '保存到本地题库',
+            icon: Icons.check_rounded,
+            onPressed: _save,
+          ),
+          const SizedBox(height: 8),
+          Center(
+            child: Text(
+              '数据仅保存于本机',
+              style: theme.textTheme.labelSmall,
+            ),
+          ),
         ],
       ),
     );

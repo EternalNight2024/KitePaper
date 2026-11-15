@@ -1,8 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
-import 'package:material_ui/material_ui.dart';
+import 'package:flutter/material.dart';
 
 import '../core/file_transfer.dart';
 import '../core/models.dart';
@@ -19,7 +18,8 @@ class PapersPage extends StatefulWidget {
 }
 
 class _PapersPageState extends State<PapersPage> {
-  String _message = '';
+  String? _message;
+  bool _failed = false;
 
   Future<void> _import() async {
     try {
@@ -36,10 +36,16 @@ class _PapersPageState extends State<PapersPage> {
       );
       await store.addPaper(paper);
       if (!mounted) return;
-      setState(() => _message = '已导入《${paper.title}》，共 ${paper.questions.length} 题');
+      setState(() {
+        _failed = false;
+        _message = '已导入《${paper.title}》，共 ${paper.questions.length} 题';
+      });
     } catch (error) {
       if (!mounted) return;
-      setState(() => _message = '导入失败：$error');
+      setState(() {
+        _failed = true;
+        _message = '导入失败：$error';
+      });
     }
   }
 
@@ -53,10 +59,16 @@ class _PapersPageState extends State<PapersPage> {
         Uint8List.fromList(utf8.encode(xml)),
       );
       if (!mounted) return;
-      setState(() => _message = '已下载 QTI 文件：$path');
+      setState(() {
+        _failed = false;
+        _message = '已下载 QTI 文件：$path';
+      });
     } catch (error) {
       if (!mounted) return;
-      setState(() => _message = '下载失败：$error');
+      setState(() {
+        _failed = true;
+        _message = '下载失败：$error';
+      });
     }
   }
 
@@ -66,26 +78,63 @@ class _PapersPageState extends State<PapersPage> {
     );
   }
 
-  void _confirmDelete(Paper paper) {
-    GlassDialog.show(
+  Future<void> _confirmDelete(Paper paper) async {
+    final theme = Theme.of(context);
+    final confirmed = await showDialog<bool>(
       context: context,
-      title: '删除试卷',
-      message: '《${paper.title}》将从本机移除',
-      actions: [
-        GlassDialogAction(
-          label: '取消',
-          onPressed: () => Navigator.of(context).pop(),
+      barrierColor: Colors.black.withValues(alpha: 0.22),
+      builder: (ctx) => Dialog(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 36),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 330),
+          child: GlassPanel(
+            heavy: true,
+            hoverable: false,
+            radius: 26,
+            padding: const EdgeInsets.fromLTRB(22, 22, 22, 18),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text('删除试卷', style: theme.textTheme.titleMedium),
+                const SizedBox(height: 8),
+                Text(
+                  '《${paper.title}》将从本机移除，此操作不可撤销。',
+                  style: theme.textTheme.bodySmall,
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    Expanded(
+                      child: GlassButton(
+                        label: '取消',
+                        primary: false,
+                        compact: true,
+                        onPressed: () => Navigator.of(ctx).pop(false),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: GlassButton(
+                        label: '删除',
+                        destructive: true,
+                        compact: true,
+                        onPressed: () => Navigator.of(ctx).pop(true),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
         ),
-        GlassDialogAction(
-          label: '删除',
-          isDestructive: true,
-          onPressed: () {
-            Navigator.of(context).pop();
-            store.removePaper(paper.id);
-          },
-        ),
-      ],
+      ),
     );
+    if (confirmed == true) {
+      await store.removePaper(paper.id);
+    }
   }
 
   @override
@@ -93,54 +142,109 @@ class _PapersPageState extends State<PapersPage> {
     return ListenableBuilder(
       listenable: store,
       builder: (context, _) {
+        final theme = Theme.of(context);
         final papers = store.papers;
         return ListView(
           padding: pagePadding,
           children: [
-            GlassButton.custom(
-              width: 220,
-              height: 48,
-              onTap: _import,
-              child: const Text('导入试卷 QTI'),
-            ),
-            if (_message.isNotEmpty) statusMessage(_message),
-            statusMessage('试卷保存在本机；导出的 .qti 文件可直接分享给他人'),
-            if (papers.isEmpty)
-              const GlassGroupedSection(
-                surfaceStyle: GlassSurfaceStyle.solid,
-                children: [
-                  GlassListTile(title: Text('暂无试卷，去「组卷」生成一张')),
-                ],
-              ),
-            for (final paper in papers)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 16),
-                child: GlassGroupedSection(
-                  surfaceStyle: GlassSurfaceStyle.solid,
-                  header: Text(
-                    '${paper.title} · ${paper.questions.length} 题 · ${paper.totalScore} 分',
-                  ),
-                  children: [
-                    GlassListTile(
-                      leading: const Icon(Icons.play_arrow),
-                      title: const Text('在线刷题'),
-                      subtitle: Text('${paper.durationMinutes} 分钟 · 离线即时判分'),
-                      onTap: () => _start(paper),
-                    ),
-                    GlassListTile(
-                      leading: const Icon(Icons.download),
-                      title: const Text('下载 QTI 试卷'),
-                      subtitle: const Text('导出后可发送给他人导入'),
-                      onTap: () => _download(paper),
-                    ),
-                    GlassListTile(
-                      leading: const Icon(Icons.delete_outline),
-                      title: const Text('删除'),
-                      onTap: () => _confirmDelete(paper),
-                    ),
-                  ],
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                GlassButton(
+                  label: '导入试卷 QTI',
+                  icon: Icons.file_download_outlined,
+                  onPressed: _import,
                 ),
+                mutedText(context, '导出的 .qti 可直接分享给他人'),
+              ],
+            ),
+            if (_message != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: GlassBanner(message: _message!, isError: _failed),
               ),
+            const SizedBox(height: 20),
+            sectionHeader(context, '我的试卷 · ${papers.length}'),
+            if (papers.isEmpty)
+              const GlassPanel(child: Text('暂无试卷，去「组卷」生成一张'))
+            else
+              for (final paper in papers)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: GlassPanel(
+                    heavy: true,
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const GlassIconBadge(
+                              icon: Icons.article_outlined,
+                              color: Color(0xFF5E5CE6),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    paper.title,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: theme.textTheme.titleMedium,
+                                  ),
+                                  const SizedBox(height: 4),
+                                  mutedText(
+                                    context,
+                                    '${paper.questions.length} 题 · '
+                                    '${paper.totalScore.toStringAsFixed(0)} 分 · '
+                                    '${paper.durationMinutes} 分钟',
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        Wrap(
+                          spacing: 10,
+                          runSpacing: 10,
+                          children: [
+                            GlassButton(
+                              label: '在线刷题',
+                              icon: Icons.play_arrow_rounded,
+                              compact: true,
+                              onPressed: () => _start(paper),
+                            ),
+                            GlassButton(
+                              label: '下载 QTI',
+                              icon: Icons.ios_share_rounded,
+                              primary: false,
+                              compact: true,
+                              onPressed: () => _download(paper),
+                            ),
+                            GlassButton(
+                              label: '删除',
+                              icon: Icons.delete_outline,
+                              destructive: true,
+                              compact: true,
+                              onPressed: () => _confirmDelete(paper),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          '试卷保存在本机 · 导出后可分享给他人',
+                          style: theme.textTheme.labelSmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
           ],
         );
       },

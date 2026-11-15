@@ -1,7 +1,6 @@
 import 'dart:convert';
 
-import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
-import 'package:material_ui/material_ui.dart';
+import 'package:flutter/material.dart';
 
 import '../core/file_transfer.dart';
 import '../core/models.dart';
@@ -18,7 +17,8 @@ class BankPage extends StatefulWidget {
 }
 
 class _BankPageState extends State<BankPage> {
-  String _message = '';
+  String? _message;
+  bool _failed = false;
 
   Future<void> _import() async {
     try {
@@ -27,10 +27,16 @@ class _BankPageState extends State<BankPage> {
       final paper = importQti(utf8.decode(bytes));
       await store.addQuestions(paper.questions);
       if (!mounted) return;
-      setState(() => _message = '已从《${paper.title}》导入 ${paper.questions.length} 道题');
+      setState(() {
+        _failed = false;
+        _message = '已从《${paper.title}》导入 ${paper.questions.length} 道题';
+      });
     } catch (error) {
       if (!mounted) return;
-      setState(() => _message = '导入失败：$error');
+      setState(() {
+        _failed = true;
+        _message = '导入失败：$error';
+      });
     }
   }
 
@@ -46,64 +52,104 @@ class _BankPageState extends State<BankPage> {
       listenable: store,
       builder: (context, _) {
         final questions = store.questions;
+        final theme = Theme.of(context);
         return ListView(
           padding: pagePadding,
           children: [
-            GlassGroupedSection(
-              surfaceStyle: GlassSurfaceStyle.solid,
+            GlassPanel(
+              heavy: true,
+              child: Row(
+                children: [
+                  const GlassIconBadge(icon: Icons.library_books_outlined),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('本地题库', style: theme.textTheme.titleMedium),
+                        const SizedBox(height: 3),
+                        mutedText(
+                          context,
+                          '${questions.length} 道题 · 纯离线保存在本机',
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
               children: [
-                GlassListTile(
-                  leading: const Icon(Icons.library_books),
-                  title: const Text('本地题库'),
-                  subtitle: Text('${questions.length} 道题 · 纯离线保存在本机'),
+                GlassButton(
+                  label: '导入 QTI',
+                  icon: Icons.file_download_outlined,
+                  onPressed: _import,
+                ),
+                GlassButton(
+                  label: '新增题目',
+                  icon: Icons.add_rounded,
+                  primary: false,
+                  onPressed: _openEditor,
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                GlassButton.custom(
-                  width: 148,
-                  height: 48,
-                  onTap: _import,
-                  child: const Text('导入 QTI'),
-                ),
-                const SizedBox(width: 12),
-                GlassButton.custom(
-                  width: 148,
-                  height: 48,
-                  onTap: _openEditor,
-                  child: const Text('新增题目'),
-                ),
-              ],
-            ),
-            if (_message.isNotEmpty) statusMessage(_message),
-            const SizedBox(height: 16),
-            GlassGroupedSection(
-              surfaceStyle: GlassSurfaceStyle.solid,
-              header: const Text('全部题目'),
-              children: questions.isEmpty
-                  ? const [GlassListTile(title: Text('题库为空，先导入或新增题目'))]
-                  : [
-                      for (final question in questions)
-                        GlassListTile(
-                          leading: const Icon(Icons.quiz_outlined),
-                          title: Text(
-                            question.stem,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          subtitle: Text(
-                            '${question.type.label} · ${question.score} 分 · '
-                            '${question.knowledge.isEmpty ? '未分类' : question.knowledge}',
-                          ),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.delete_outline),
-                            onPressed: () => store.removeQuestion(question.id),
+            if (_message != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: GlassBanner(message: _message!, isError: _failed),
+              ),
+            const SizedBox(height: 20),
+            sectionHeader(context, '全部题目 · ${questions.length}'),
+            if (questions.isEmpty)
+              const GlassPanel(child: Text('题库为空，先导入或新增题目'))
+            else
+              for (final question in questions)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: GlassPanel(
+                    radius: 18,
+                    sigma: 18,
+                    padding: const EdgeInsets.fromLTRB(14, 14, 10, 14),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const GlassIconBadge(
+                          icon: Icons.quiz_outlined,
+                          color: Color(0xFF5E5CE6),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                question.stem,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.bodyMedium,
+                              ),
+                              const SizedBox(height: 4),
+                              mutedText(
+                                context,
+                                '${question.type.label} · ${question.score} 分 · '
+                                '${question.knowledge.isEmpty ? '未分类' : question.knowledge}',
+                              ),
+                            ],
                           ),
                         ),
-                    ],
-            ),
+                        const SizedBox(width: 6),
+                        GlassIconButton(
+                          icon: Icons.delete_outline,
+                          label: '删除题目',
+                          onPressed: () => store.removeQuestion(question.id),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
           ],
         );
       },
