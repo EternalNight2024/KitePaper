@@ -1,30 +1,38 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 
 import '../core/file_transfer.dart';
+import '../core/layout.dart';
 import '../core/models.dart';
 import '../core/qti.dart';
 import '../core/store.dart';
-import '../core/ui.dart';
+import '../theme/app_theme.dart';
 import 'exam_page.dart';
+import 'shared_widgets.dart';
 
 class PapersPage extends StatefulWidget {
-  const PapersPage({super.key});
+  const PapersPage({
+    super.key,
+    this.mode = AppMode.teacher,
+    this.controller,
+  });
+
+  final AppMode mode;
+  final GlassLargeTitleController? controller;
 
   @override
   State<PapersPage> createState() => _PapersPageState();
 }
 
 class _PapersPageState extends State<PapersPage> {
-  String? _message;
-  bool _failed = false;
-
   Future<void> _import() async {
     try {
       final bytes = await pickQtiFile();
-      if (bytes == null) return;
+      if (bytes == null || !mounted) return;
       final source = importQti(utf8.decode(bytes));
       final paper = Paper(
         id: newId(),
@@ -36,16 +44,12 @@ class _PapersPageState extends State<PapersPage> {
       );
       await store.addPaper(paper);
       if (!mounted) return;
-      setState(() {
-        _failed = false;
-        _message = '已导入《${paper.title}》，共 ${paper.questions.length} 题';
-      });
+      GlassToast.show(context,
+          message: '已导入《${paper.title}》，共 ${paper.questions.length} 题');
     } catch (error) {
       if (!mounted) return;
-      setState(() {
-        _failed = true;
-        _message = '导入失败：$error';
-      });
+      GlassToast.show(context,
+          message: '导入失败：$error', type: GlassToastType.error);
     }
   }
 
@@ -59,82 +63,36 @@ class _PapersPageState extends State<PapersPage> {
         Uint8List.fromList(utf8.encode(xml)),
       );
       if (!mounted) return;
-      setState(() {
-        _failed = false;
-        _message = '已下载 QTI 文件：$path';
-      });
+      GlassToast.show(context, message: '已保存 QTI 文件：$path');
     } catch (error) {
       if (!mounted) return;
-      setState(() {
-        _failed = true;
-        _message = '下载失败：$error';
-      });
+      GlassToast.show(context,
+          message: '下载失败：$error', type: GlassToastType.error);
     }
   }
 
   void _start(Paper paper) {
     Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (_) => ExamPage(paper: paper)),
+      GlassPageRoute<void>(builder: (_) => ExamPage(paper: paper)),
     );
   }
 
   Future<void> _confirmDelete(Paper paper) async {
-    final theme = Theme.of(context);
-    final confirmed = await showDialog<bool>(
+    final confirmed = await GlassDialog.show<bool>(
       context: context,
-      barrierColor: Colors.black.withValues(alpha: 0.22),
-      builder: (ctx) => Dialog(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        insetPadding: const EdgeInsets.symmetric(horizontal: 36),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 330),
-          child: GlassPanel(
-            heavy: true,
-            hoverable: false,
-            radius: 26,
-            padding: const EdgeInsets.fromLTRB(22, 22, 22, 18),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text('删除试卷', style: theme.textTheme.titleMedium),
-                const SizedBox(height: 8),
-                Text(
-                  '《${paper.title}》将从本机移除，此操作不可撤销。',
-                  style: theme.textTheme.bodySmall,
-                ),
-                const SizedBox(height: 20),
-                Row(
-                  children: [
-                    Expanded(
-                      child: GlassButton(
-                        label: '取消',
-                        primary: false,
-                        compact: true,
-                        onPressed: () => Navigator.of(ctx).pop(false),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: GlassButton(
-                        label: '删除',
-                        destructive: true,
-                        compact: true,
-                        onPressed: () => Navigator.of(ctx).pop(true),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
+      title: '删除试卷',
+      message: '《${paper.title}》将从本机移除，此操作不可撤销。',
+      actions: [
+        GlassDialogAction(
+            label: '取消', onPressed: () => Navigator.of(context).pop(false)),
+        GlassDialogAction(
+          label: '删除',
+          isDestructive: true,
+          onPressed: () => Navigator.of(context).pop(true),
         ),
-      ),
+      ],
     );
-    if (confirmed == true) {
-      await store.removePaper(paper.id);
-    }
+    if (confirmed == true) await store.removePaper(paper.id);
   }
 
   @override
@@ -142,39 +100,44 @@ class _PapersPageState extends State<PapersPage> {
     return ListenableBuilder(
       listenable: store,
       builder: (context, _) {
-        final theme = Theme.of(context);
         final papers = store.papers;
-        return ListView(
-          padding: pagePadding,
+        final student = widget.mode == AppMode.student;
+        final theme = Theme.of(context);
+        return GlassPageBody(
+          controller: widget.controller,
+          title: student ? '练习' : '试卷',
           children: [
             Wrap(
               spacing: 10,
               runSpacing: 10,
               crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                GlassButton(
-                  label: '导入试卷 QTI',
-                  icon: Icons.file_download_outlined,
-                  onPressed: _import,
+                ActionGlassButton(
+                  label: student ? '导入他人试卷 QTI' : '导入试卷 QTI',
+                  icon: CupertinoIcons.arrow_down_doc,
+                  prominent: true,
+                  accent: AppTheme.modeColor(widget.mode),
+                  onTap: _import,
                 ),
-                mutedText(context, '导出的 .qti 可直接分享给他人'),
+                Text(
+                  student ? '导入后即可逐题练习，客观题即时判分' : '组卷后可导出 .qti 分享给他人',
+                  style: theme.textTheme.bodySmall,
+                ),
               ],
             ),
-            if (_message != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 12),
-                child: GlassBanner(message: _message!, isError: _failed),
-              ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 22),
             sectionHeader(context, '我的试卷 · ${papers.length}'),
             if (papers.isEmpty)
-              const GlassPanel(child: Text('暂无试卷，去「组卷」生成一张'))
+              GlassContainer.card(
+                surfaceStyle: GlassSurfaceStyle.solid,
+                child: const Text('暂无试卷，去「组卷」生成一张'),
+              )
             else
               for (final paper in papers)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 12),
-                  child: GlassPanel(
-                    heavy: true,
+                  child: GlassContainer.card(
+                    surfaceStyle: GlassSurfaceStyle.solid,
                     padding: const EdgeInsets.all(16),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -182,28 +145,32 @@ class _PapersPageState extends State<PapersPage> {
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const GlassIconBadge(
-                              icon: Icons.article_outlined,
-                              color: Color(0xFF5E5CE6),
+                            Container(
+                              width: 36,
+                              height: 36,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(11),
+                                color: theme.colorScheme.primary
+                                    .withValues(alpha: 0.12),
+                              ),
+                              child: Icon(CupertinoIcons.doc_text,
+                                  size: 18, color: theme.colorScheme.primary),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                    paper.title,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: theme.textTheme.titleMedium,
-                                  ),
+                                  Text(paper.title,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: theme.textTheme.titleSmall),
                                   const SizedBox(height: 4),
-                                  mutedText(
-                                    context,
-                                    '${paper.questions.length} 题 · '
-                                    '${paper.totalScore.toStringAsFixed(0)} 分 · '
-                                    '${paper.durationMinutes} 分钟',
-                                  ),
+                                  Text(
+                                      '${paper.questions.length} 题 · '
+                                      '${formatScore(paper.totalScore)} 分 · '
+                                      '${paper.durationMinutes} 分钟',
+                                      style: theme.textTheme.bodySmall),
                                 ],
                               ),
                             ),
@@ -214,32 +181,29 @@ class _PapersPageState extends State<PapersPage> {
                           spacing: 10,
                           runSpacing: 10,
                           children: [
-                            GlassButton(
-                              label: '在线刷题',
-                              icon: Icons.play_arrow_rounded,
+                            ActionGlassButton(
+                              label: student ? '开始刷题' : '预览练习',
+                              icon: CupertinoIcons.play_fill,
                               compact: true,
-                              onPressed: () => _start(paper),
+                              prominent: true,
+                              accent: AppTheme.modeColor(widget.mode),
+                              onTap: () => _start(paper),
                             ),
-                            GlassButton(
-                              label: '下载 QTI',
-                              icon: Icons.ios_share_rounded,
-                              primary: false,
+                            ActionGlassButton(
+                              label: student ? '下载试卷文件' : '导出 QTI',
+                              icon: CupertinoIcons.square_arrow_up,
                               compact: true,
-                              onPressed: () => _download(paper),
+                              onTap: () => _download(paper),
                             ),
-                            GlassButton(
-                              label: '删除',
-                              icon: Icons.delete_outline,
-                              destructive: true,
-                              compact: true,
-                              onPressed: () => _confirmDelete(paper),
-                            ),
+                            if (!student)
+                              ActionGlassButton(
+                                label: '删除',
+                                icon: CupertinoIcons.trash,
+                                compact: true,
+                                destructive: true,
+                                onTap: () => _confirmDelete(paper),
+                              ),
                           ],
-                        ),
-                        const SizedBox(height: 10),
-                        Text(
-                          '试卷保存在本机 · 导出后可分享给他人',
-                          style: theme.textTheme.labelSmall,
                         ),
                       ],
                     ),

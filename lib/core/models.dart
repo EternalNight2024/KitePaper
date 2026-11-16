@@ -1,5 +1,23 @@
 import 'dart:math';
 
+/// 应用使用模式：教师负责出题与组卷，学生负责导入与练习。
+enum AppMode { teacher, student }
+
+extension AppModeX on AppMode {
+  String get code => this == AppMode.teacher ? 'teacher' : 'student';
+
+  String get label => this == AppMode.teacher ? '教师模式' : '学生模式';
+
+  String get shortLabel => this == AppMode.teacher ? '教师' : '学生';
+
+  String get description => this == AppMode.teacher
+      ? '管理题库、手动组卷、导出 QTI 分享'
+      : '导入试卷、逐题刷题、查看成绩与错题';
+}
+
+AppMode appModeFromCode(String? code) =>
+    code == 'student' ? AppMode.student : AppMode.teacher;
+
 enum QuestionType { single, multiple, trueFalse, fillBlank, essay }
 
 extension QuestionTypeX on QuestionType {

@@ -39,6 +39,7 @@ dependencies:
   file_picker: ^13.3.3
   path_provider: ^2.1.6
   web: ^1.1.2
+  liquid_glass_widgets: ^1.17.4
 dev_dependencies:
   flutter_test:
     sdk: flutter

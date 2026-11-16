@@ -98,4 +98,14 @@ void main() {
     expect(result.wrongStems.length, 3);
     expect(result.pendingCount, 1);
   });
+
+  test('教师/学生模式编码可持久化往返', () {
+    for (final mode in AppMode.values) {
+      expect(appModeFromCode(mode.code), mode);
+    }
+    expect(appModeFromCode(null), AppMode.teacher);
+    expect(appModeFromCode('unknown'), AppMode.teacher);
+    expect(AppMode.teacher.label, '教师模式');
+    expect(AppMode.student.label, '学生模式');
+  });
 }

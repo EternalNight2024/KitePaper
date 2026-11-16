@@ -1,21 +1,22 @@
-import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:kitepaper/core/ui.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 
 void main() {
-  testWidgets('导航项悬浮时出现高亮背景', (tester) async {
+  testWidgets('GlassSegmentedControl 切换分段', (tester) async {
+    var selected = 0;
     await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: Center(
-            child: SizedBox(
-              width: 180,
-              child: GlassNavItem(
-                selected: false,
-                child: const Text('组卷'),
-                onTap: () {},
+      CupertinoApp(
+        home: CupertinoPageScaffold(
+          child: Center(
+            child: StatefulBuilder(
+              builder: (context, setState) => GlassSegmentedControl(
+                segments: const [
+                  GlassSegment(label: '教师'),
+                  GlassSegment(label: '学生'),
+                ],
+                selectedIndex: selected,
+                onSegmentSelected: (index) => setState(() => selected = index),
               ),
             ),
           ),
@@ -23,53 +24,27 @@ void main() {
       ),
     );
 
-    ShapeDecoration decorationOf() {
-      final container = tester.widget<AnimatedContainer>(
-        find.descendant(
-          of: find.byType(GlassNavItem),
-          matching: find.byType(AnimatedContainer),
-        ),
-      );
-      return container.decoration! as ShapeDecoration;
-    }
-
-    expect(decorationOf().color, Colors.transparent);
-
-    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
-    await gesture.addPointer(location: Offset.zero);
-    addTearDown(gesture.removePointer);
+    expect(find.text('教师'), findsOneWidget);
+    expect(find.text('学生'), findsOneWidget);
+    await tester.tap(find.text('学生'));
     await tester.pumpAndSettle();
-
-    await gesture.moveTo(tester.getCenter(find.text('组卷')));
-    await tester.pumpAndSettle();
-
-    expect(decorationOf().color, isNot(Colors.transparent));
-    expect(decorationOf().color!.a, greaterThan(0));
-
-    await gesture.moveTo(const Offset(1, 1));
-    await tester.pumpAndSettle();
-
-    expect(decorationOf().color, Colors.transparent);
+    expect(selected, 1);
   });
 
-  testWidgets('玻璃面板使用超椭圆圆角', (tester) async {
+  testWidgets('GlassContainer.card solid 渲染为实色卡片', (tester) async {
     await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
-          body: GlassPanel(child: Text('卡片')),
+      const CupertinoApp(
+        home: CupertinoPageScaffold(
+          child: GlassContainer.card(
+            surfaceStyle: GlassSurfaceStyle.solid,
+            child: Text('卡片'),
+          ),
         ),
       ),
     );
 
-    final clip = tester.widget<ClipPath>(
-      find.descendant(
-        of: find.byType(GlassPanel),
-        matching: find.byType(ClipPath),
-      ),
-    );
-    expect(clip.clipper, isA<SquircleClipper>());
-
-    final clipper = clip.clipper! as SquircleClipper;
-    expect(clipper.border, isA<RoundedSuperellipseBorder>());
+    expect(find.text('卡片'), findsOneWidget);
   });
 }
+
+

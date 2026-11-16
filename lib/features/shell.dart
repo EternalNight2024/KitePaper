@@ -1,9 +1,15 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 
-import '../core/ui.dart';
+import '../core/app_background.dart';
+import '../core/layout.dart';
+import '../core/models.dart';
+import '../core/store.dart';
 import '../theme/app_theme.dart';
 import 'bank_page.dart';
 import 'builder_page.dart';
+import 'guide_page.dart';
 import 'papers_page.dart';
 import 'results_page.dart';
 
@@ -14,310 +20,361 @@ class AppShell extends StatefulWidget {
   State<AppShell> createState() => _AppShellState();
 }
 
+class _TabSpec {
+  const _TabSpec({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.page,
+  });
+
+  final String title;
+  final String subtitle;
+  final IconData icon;
+
+  /// 页面构造器：窄屏传入大标题控制器，宽屏传 null。
+  final Widget Function(GlassLargeTitleController?) page;
+}
+
 class _AppShellState extends State<AppShell> {
   int _index = 0;
+  Color _accent = AppTheme.teacher;
+  final Map<String, GlassLargeTitleController> _controllers = {};
 
-  static const _titles = ['题库', '组卷', '试卷', '成绩'];
-  static const _subtitles = ['本地题目与导入', '挑选题目生成试卷', '刷题与分享', '成绩与错题本'];
-  static const _icons = [
-    Icons.library_books_outlined,
-    Icons.playlist_add_rounded,
-    Icons.article_outlined,
-    Icons.insights_outlined,
-  ];
+  @override
+  void dispose() {
+    for (final controller in _controllers.values) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
 
-  List<Widget> get _pages => [
-        const BankPage(),
-        BuilderPage(onCreated: () => setState(() => _index = 2)),
-        const PapersPage(),
-        const ResultsPage(),
-      ];
+  GlassLargeTitleController _controllerFor(String key) =>
+      _controllers.putIfAbsent(key, GlassLargeTitleController.new);
+
+  List<_TabSpec> _tabs(AppMode mode) => mode == AppMode.teacher
+      ? [
+          _TabSpec(
+            title: '题库',
+            subtitle: '本地题目与导入',
+            icon: CupertinoIcons.book,
+            page: (c) => BankPage(controller: c),
+          ),
+          _TabSpec(
+            title: '组卷',
+            subtitle: '挑选题目生成试卷',
+            icon: CupertinoIcons.square_stack_3d_up,
+            page: (c) => BuilderPage(controller: c, onCreated: () => _select(2)),
+          ),
+          _TabSpec(
+            title: '试卷',
+            subtitle: '导出 QTI 分享',
+            icon: CupertinoIcons.doc_text,
+            page: (c) => PapersPage(mode: AppMode.teacher, controller: c),
+          ),
+          _TabSpec(
+            title: '指引',
+            subtitle: '教程与在线功能',
+            icon: CupertinoIcons.lightbulb,
+            page: (c) => GuidePage(mode: AppMode.teacher, controller: c),
+          ),
+        ]
+      : [
+          _TabSpec(
+            title: '练习',
+            subtitle: '导入试卷并刷题',
+            icon: CupertinoIcons.pencil,
+            page: (c) => PapersPage(mode: AppMode.student, controller: c),
+          ),
+          _TabSpec(
+            title: '成绩',
+            subtitle: '成绩与错题本',
+            icon: CupertinoIcons.chart_bar,
+            page: (c) => ResultsPage(controller: c),
+          ),
+          _TabSpec(
+            title: '指引',
+            subtitle: '教程与在线功能',
+            icon: CupertinoIcons.lightbulb,
+            page: (c) => GuidePage(mode: AppMode.student, controller: c),
+          ),
+        ];
+
+  void _select(int index) => setState(() => _index = index);
+
+  void _setMode(int index) {
+    final mode = index == 0 ? AppMode.teacher : AppMode.student;
+    if (mode == store.mode) return;
+    store.setMode(mode);
+    setState(() => _index = 0);
+  }
+
+  /// 模式切换控件：教师 / 学生。
+  Widget _modeSwitch({bool compact = false, bool withIcons = false}) =>
+      GlassSegmentedControl(
+        segments: [
+          GlassSegment(
+            label: '教师',
+            icon: withIcons
+                ? const Icon(CupertinoIcons.person_crop_square, size: 15)
+                : null,
+          ),
+          GlassSegment(
+            label: '学生',
+            icon: withIcons ? const Icon(CupertinoIcons.book, size: 15) : null,
+          ),
+        ],
+        selectedIndex: store.mode == AppMode.teacher ? 0 : 1,
+        onSegmentSelected: _setMode,
+        height: compact ? 32 : 36,
+        indicatorColor: _accent,
+        // 库内部按 fontSize 构造标签样式（不带字体族），这里显式补上，
+        // 以便统一使用主题字体。
+        selectedTextStyle: TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          fontFamily: AppTheme.fontFamilyOverride,
+        ),
+        unselectedTextStyle: TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w500,
+          fontFamily: AppTheme.fontFamilyOverride,
+        ),
+      );
 
   @override
   Widget build(BuildContext context) {
-    return AuroraBackground(
-      child: SafeArea(
-        bottom: false,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            if (constraints.maxWidth >= kLargeScreenMinWidth) {
-              return _desktopLayout();
-            }
-            return _mobileLayout();
-          },
-        ),
-      ),
-    );
-  }
+    return ListenableBuilder(
+      listenable: store,
+      builder: (context, _) {
+        final tabs = _tabs(store.mode);
+        final index = _index.clamp(0, tabs.length - 1);
+        _accent = AppTheme.modeColor(store.mode);
+        final wide = MediaQuery.sizeOf(context).width >= kLargeScreenMinWidth;
+        // 仅窄屏使用大标题；宽屏侧边栏布局不需要滚动折叠标题。
+        final controller = wide
+            ? null
+            : _controllerFor('${store.mode.code}-$index-${tabs[index].title}');
 
-  // ---------------------------------------------------------------- 移动端
-
-  Widget _mobileLayout() {
-    final bottomInset = MediaQuery.paddingOf(context).bottom;
-    return Stack(
-      children: [
-        Column(
-          children: [
-            _largeTitle(),
-            Expanded(
-              child: IndexedStack(index: _index, children: _pages),
-            ),
-          ],
-        ),
-        Positioned(
-          left: 18,
-          right: 18,
-          bottom: 14 + bottomInset,
-          child: GlassPanel(
-            heavy: true,
-            hoverable: false,
-            radius: 28,
-            sigma: 30,
-            padding: const EdgeInsets.all(7),
-            child: Row(
-              children: [
-                for (var i = 0; i < _titles.length; i++)
-                  Expanded(child: _tabItem(i)),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _tabItem(int i) {
-    final selected = _index == i;
-    final theme = Theme.of(context);
-    final dark = theme.brightness == Brightness.dark;
-    final idle = dark
-        ? Colors.white.withValues(alpha: 0.66)
-        : const Color(0xFF6E6E73);
-
-    return GlassNavItem(
-      selected: selected,
-      radius: 20,
-      padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 4),
-      onTap: () => setState(() => _index = i),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(_icons[i], size: 20, color: selected ? AppTheme.accent : idle),
-          const SizedBox(height: 3),
-          Text(
-            _titles[i],
-            style: theme.textTheme.labelSmall?.copyWith(
-              letterSpacing: 0.2,
-              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-              color: selected ? AppTheme.accent : idle,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _largeTitle() {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(22, 12, 22, 14),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'KITEPAPER',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    letterSpacing: 1.6,
-                    fontWeight: FontWeight.w700,
+        return GlassScaffold(
+          background: const AppBackground(),
+          backgroundColor: appBackgroundColor(Theme.of(context).brightness),
+          statusBarStyle: GlassStatusBarStyle.auto,
+          appBar: wide
+              ? null
+              : GlassAppBar(
+                  centerTitle: false,
+                  title: Text(
+                    tabs[index].title,
+                    style: Theme.of(context).textTheme.titleMedium,
                   ),
-                ),
-                const SizedBox(height: 3),
-                Text(_titles[_index], style: theme.textTheme.displaySmall),
-              ],
-            ),
-          ),
-          GlassIconButton(
-            icon: Icons.auto_awesome_outlined,
-            label: '纸鸢',
-            onPressed: () {},
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ---------------------------------------------------------------- 桌面端
-
-  Widget _desktopLayout() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(22, 20, 22, 20),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          SizedBox(width: 264, child: _sidebar()),
-          const SizedBox(width: 22),
-          Expanded(
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: kContentMaxWidth),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _desktopHeader(),
-                    const SizedBox(height: 16),
-                    Expanded(
-                      child: IndexedStack(index: _index, children: _pages),
+                  largeTitleController: controller,
+                  actions: [
+                    // AppBar 的 actions 槽位宽度不受限，GlassSegmentedControl
+                    // 内部使用 Expanded 无法在此布局，故窄屏改用下拉菜单。
+                    GlassPullDownButton(
+                      buttonWidth: 38,
+                      buttonHeight: 32,
+                      buttonShape:
+                          const LiquidRoundedSuperellipse(borderRadius: 11),
+                      icon: Icon(
+                        store.mode == AppMode.teacher
+                            ? CupertinoIcons.person_crop_square_fill
+                            : CupertinoIcons.book_fill,
+                        size: 17,
+                      ),
+                      semanticLabel: '切换身份',
+                      menuSemanticLabel: '选择身份',
+                      items: [
+                        GlassMenuItem(
+                          title: '教师模式',
+                          icon: const Icon(CupertinoIcons.person_crop_square),
+                          isSelected: store.mode == AppMode.teacher,
+                          onTap: () => _setMode(0),
+                        ),
+                        GlassMenuItem(
+                          title: '学生模式',
+                          icon: const Icon(CupertinoIcons.book),
+                          isSelected: store.mode == AppMode.student,
+                          onTap: () => _setMode(1),
+                        ),
+                      ],
                     ),
+                    const SizedBox(width: 4),
                   ],
                 ),
-              ),
-            ),
-          ),
-        ],
-      ),
+          body: _body(tabs, index, wide),
+          bottomBar: wide
+              ? null
+              : GlassTabBar.bottom(
+                  tabs: [
+                    for (final tab in tabs)
+                      GlassTab(icon: Icon(tab.icon), label: tab.title),
+                  ],
+                  selectedIndex: index,
+                  onTabSelected: _select,
+                  selectedIconColor: AppTheme.accent,
+                  selectedLabelColor: AppTheme.accent,
+                ),
+        );
+      },
     );
   }
 
-  Widget _sidebar() {
-    final theme = Theme.of(context);
-    final dark = theme.brightness == Brightness.dark;
-    return GlassPanel(
-      heavy: true,
-      hoverable: false,
-      radius: 26,
-      sigma: 30,
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(8, 6, 8, 18),
-            child: Row(
-              children: [
-                DecoratedBox(
-                  decoration: ShapeDecoration(
-                    shape: squircle(10),
-                    gradient: const LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [AppTheme.accent, Color(0xFF5E5CE6)],
-                    ),
-                  ),
-                  child: const SizedBox(
-                    width: 30,
-                    height: 30,
-                    child: Icon(Icons.air, size: 17, color: Colors.white),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    '纸鸢',
-                    style: theme.textTheme.titleMedium,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          for (var i = 0; i < _titles.length; i++) _sideItem(i),
-          const Spacer(),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(10, 12, 10, 4),
-            child: Text(
-              '离线 · 数据仅存本机',
-              style: theme.textTheme.labelSmall?.copyWith(
-                letterSpacing: 0.6,
-                color: dark
-                    ? Colors.white.withValues(alpha: 0.45)
-                    : const Color(0xFF8E8E93),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget _body(List<_TabSpec> tabs, int index, bool wide) {
+    final pages = [
+      for (var i = 0; i < tabs.length; i++)
+        tabs[i].page(wide
+            ? null
+            : _controllerFor('${store.mode.code}-$i-${tabs[i].title}')),
+    ];
 
-  Widget _sideItem(int i) {
-    final selected = _index == i;
-    final theme = Theme.of(context);
-    final dark = theme.brightness == Brightness.dark;
+    if (!wide) {
+      return IndexedStack(index: index, children: pages);
+    }
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: GlassNavItem(
-        selected: selected,
-        radius: 14,
-        onTap: () => setState(() => _index = i),
-        child: Row(
+      padding: const EdgeInsets.only(top: 18),
+      child: Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(width: 252, child: _sidebar(tabs, index)),
+        const SizedBox(width: 20),
+        Expanded(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: kContentMaxWidth),
+              child: SizedBox(
+                width: double.infinity,
+                child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(4, 4, 4, 12),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'KITEPAPER',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .labelSmall
+                                    ?.copyWith(letterSpacing: 1.8),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(tabs[index].subtitle,
+                                  style:
+                                      Theme.of(context).textTheme.bodySmall),
+                            ],
+                          ),
+                        ),
+                        // Row 的非 flex 子项会拿到无界宽度，分段控件内部
+                        // 使用 Expanded，必须显式约束宽度。
+                                        SizedBox(width: 132, child: _modeSwitch()),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: IndexedStack(index: index, children: pages),
+                  ),
+                ],
+              ),
+              ),
+            ),
+          ),
+        ),
+      ],
+      ),
+    );
+  }
+
+  Widget _sidebar(List<_TabSpec> tabs, int index) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(top: 4, bottom: 8),
+      child: GlassContainer.card(
+        surfaceStyle: GlassSurfaceStyle.solid,
+        padding: const EdgeInsets.all(10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Icon(
-              _icons[i],
-              size: 19,
-              color: selected
-                  ? AppTheme.accent
-                  : (dark
-                      ? Colors.white.withValues(alpha: 0.72)
-                      : const Color(0xFF6E6E73)),
-            ),
-            const SizedBox(width: 11),
-            Expanded(
-              child: Text(
-                _titles[i],
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.titleSmall?.copyWith(
-                  color: selected
-                      ? (dark ? Colors.white : const Color(0xFF1C1C1E))
-                      : (dark
-                          ? Colors.white.withValues(alpha: 0.80)
-                          : const Color(0xFF3A3A3C)),
-                  fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-                ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 18),
+              child: Row(
+                children: [
+                  Container(
+                    width: 34,
+                    height: 34,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(11),
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [_accent, AppTheme.accentDeep],
+                      ),
+                    ),
+                    child: const Icon(CupertinoIcons.paperplane_fill,
+                        size: 16, color: Colors.white),
+                  ),
+                  const SizedBox(width: 11),
+                  Text('纸鸢', style: theme.textTheme.titleMedium),
+                ],
               ),
             ),
-            if (selected)
-              Container(
-                width: 5,
-                height: 5,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: AppTheme.accent,
+            for (var i = 0; i < tabs.length; i++)
+              GlassButton.custom(
+                onTap: () => _select(i),
+                height: 44,
+                style: GlassButtonStyle.transparent,
+                shape: const LiquidRoundedSuperellipse(borderRadius: 12),
+                glowColor: i == index
+                    ? AppTheme.accent
+                    : theme.colorScheme.primary,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  child: Row(
+                    children: [
+                      Icon(tabs[i].icon,
+                          size: 20,
+                          color: i == index ? _accent : null),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          tabs[i].title,
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            color: i == index ? _accent : null,
+                            fontWeight: i == index
+                                ? FontWeight.w600
+                                : FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      if (i == index)
+                        Container(
+                          width: 6,
+                          height: 6,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: _accent,
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               ),
+            const Spacer(),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+              child: Text('离线 · 数据仅存本机',
+                  style: theme.textTheme.labelSmall),
+            ),
           ],
         ),
       ),
-    );
-  }
-
-  Widget _desktopHeader() {
-    final theme = Theme.of(context);
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'KITEPAPER',
-                style: theme.textTheme.labelSmall?.copyWith(
-                  letterSpacing: 1.6,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 3),
-              Text(_titles[_index], style: theme.textTheme.displaySmall),
-            ],
-          ),
-        ),
-        Text(_subtitles[_index], style: theme.textTheme.bodySmall),
-      ],
     );
   }
 }
