@@ -124,6 +124,12 @@ jobs:
           name: kitepaper-android-apk
           path: dist/android
 
+      - name: Download Android AAB artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: kitepaper-android-aab
+          path: dist/android-aab
+
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}

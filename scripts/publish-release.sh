@@ -6,6 +6,7 @@
 # 输入:
 #   dist/windows/kitepaper.zip
 #   dist/android/app-release.apk
+#   dist/android-aab/app-release.aab
 # ============================================================================
 set -euo pipefail
 
@@ -67,6 +68,15 @@ if [ -f "dist/android/app-release.apk" ]; then
     --repo "${GITHUB_REPOSITORY}"
 else
   echo "[WARN] 找不到 dist/android/app-release.apk，跳过"
+fi
+
+echo ">>> 上传 Android AAB..."
+if [ -f "dist/android-aab/app-release.aab" ]; then
+  gh release upload "$TAG" "dist/android-aab/app-release.aab" \
+    --clobber \
+    --repo "${GITHUB_REPOSITORY}"
+else
+  echo "[WARN] 找不到 dist/android-aab/app-release.aab，跳过"
 fi
 
 echo "[DONE] Release $TAG 已发布：https://github.com/${GITHUB_REPOSITORY}/releases/tag/$TAG"
