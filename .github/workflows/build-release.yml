@@ -1,10 +1,8 @@
 name: Build & Release (Windows / Android)
 
+# 仅由手动 / 脚本触发（workflow_dispatch），push 与 PR 不触发 CI。
+# 触发方式： gh workflow run build-release.yml --ref main [-f tag=... -f release_notes=...]
 on:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
   workflow_dispatch:
     inputs:
       tag:
@@ -107,7 +105,7 @@ jobs:
     name: Publish Release
     needs: [build-windows, build-android]
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main'
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
