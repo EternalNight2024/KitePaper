@@ -778,7 +778,7 @@ class GlassPageScaffold extends StatelessWidget {
                       style: theme.textTheme.titleMedium,
                     ),
                   ),
-                  if (action != null) action!,
+                  ?action,
                 ],
               ),
             ),

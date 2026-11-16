@@ -18,6 +18,11 @@ analyzer:
     - windows/**
     - macos/**
     - linux/**
+  errors:
+    # Flutter 3.50 将 material.dart / cupertino.dart 标记为 deprecated，
+    # 推荐拆分的 material_ui / cupertino_ui 入口。当前沿用统一入口，
+    # 待专门迁移时再移除此抑制。
+    deprecated_member_use: ignore
 
 linter:
   # The lint rules applied to this project can be customized in the
