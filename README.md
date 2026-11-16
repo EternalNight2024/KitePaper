@@ -36,16 +36,15 @@ flutter doctor
 
 若官方源访问较慢，可按需设置 `FLUTTER_STORAGE_BASE_URL` 与 `PUB_HOSTED_URL` 指向镜像站。
 
-## 依赖与液态玻璃 skill
+## 依赖与 UI 实现
 
-核心依赖：`liquid_glass_widgets`、`shared_preferences`、`xml`、`file_picker`、`path_provider`、`web`。
+核心依赖：`shared_preferences`、`xml`、`file_picker`、`path_provider`、`web`。
 
-包自带的官方 AI 开发指南已安装到 `.codebuddy/skills/liquid-glass-widgets/SKILL.md`，编写 UI 时遵循其中规则：
+当前玻璃质感由 `lib/core/ui.dart` 自行实现（`RoundedSuperellipseBorder` 超椭圆 + `BackdropFilter` 模糊 + 高光描边/投影），**未依赖 `liquid_glass_widgets` 包**；`.codebuddy/skills/liquid-glass-widgets/` 与 `skills/apple-design/` 仅作为设计参考，编写 UI 时遵循：
 
-- `main()` 中先 `await LiquidGlassWidgets.initialize()`，再用 `LiquidGlassWidgets.wrap()` 包裹应用
-- 页面使用 `GlassScaffold` + `GlassTabBar.bottom`，列表卡片使用 `surfaceStyle: GlassSurfaceStyle.solid`
-- 玻璃只用于导航与悬浮控件（platter），不在玻璃容器内嵌套 `GlassButton` / `GlassIconButton`
-- 只导入公共入口 `package:liquid_glass_widgets/liquid_glass_widgets.dart`
+- 玻璃只用于导航、卡片与悬浮控件，不在玻璃容器内再嵌套 `GlassButton` / `GlassIconButton`
+- 尊重 `reduceMotion` 与 `highContrast`（高对比度时退化为实色）
+- 响应式：窄屏用底部标签栏，宽屏（≥700）用侧边栏
 
 ## 目录结构
 
@@ -98,7 +97,10 @@ flutter run                 # 选择设备；Web 可用 flutter run -d chrome
 flutter build web           # 也可构建 apk / ios / linux / macos / windows
 ```
 
-当前状态：`flutter analyze` 无问题，`flutter test` 4 个测试通过，`flutter build web --release` 成功。`liquid_glass_widgets` 的着色器在 Windows 上有编译警告，不影响 Web 构建。
+构建脚本 `scripts/build-windows.sh` / `scripts/build-android.sh` 会先执行 analyze 与 test，**失败即中止**（不再用 `|| true` 吞掉错误）。产物：
+
+- Windows：`build/windows/kitepaper.zip`
+- Android：`build/app/outputs/flutter-apk/app-release.apk` 与 `build/app/outputs/bundle/release/app-release.aab`
 
 ### Web 本地测试
 
@@ -111,23 +113,15 @@ flutter build web           # 也可构建 apk / ios / linux / macos / windows
 
 打开 `http://localhost:8080/` 查看，`Ctrl+C` 停止服务器；产物位于 `build/web/`（已被 Git 忽略）。
 
-## Git 远程与推送
-
-本仓库配置了两个远程，默认一次推送会同时写入两者：
+## Git 远程、构建与发布
 
 | 远程 | 地址 | 说明 |
 | --- | --- | --- |
 | `origin` | `https://cnb.cool/infinity-quadrant/KitePaper.git` | 主仓库，fetch 与 push |
-| `github` | `https://github.com/EternalNight2024/KitePaper.git` | 镜像仓库，push |
+| GitHub 镜像 | `https://github.com/EternalNight2024/KitePaper.git` | Release 发布目标 |
 
-实现方式是给 `origin` 配置两条 `pushurl`，并指定 `remote.pushDefault = origin`：
+- 本地构建：`./scripts/build-windows.sh`、`./scripts/build-android.sh`。两者都会先跑 analyze/test，失败即中止。
+- CI：`.github/workflows/build-release.yml` 在 push 到 `main` 时构建 Windows + Android，并创建 GitHub Release 上传产物（Windows zip、Android APK）。workflow_dispatch 可指定 tag 与 release notes。
+- 凭据：GitHub token 仅放本地 `.github_token`（已加入 `.gitignore`，**不得提交**）。`gh` 用 `gh auth login --with-token < .github_token` 配置；不要把 token 写进 remote URL 或仓库文件。
 
-```bash
-git remote -v
-git config --get-all remote.origin.pushurl
-
-git push                       # 同时推送到 CNB 与 GitHub
-git push github main           # 仅推送到 GitHub
-```
-
-注意：两个远程需要各自的推送凭据；Git 按顺序推送，若第二个失败会整体报错，但第一个可能已更新，重试前建议先确认两侧状态。
+注意：推送到 CNB 与发布到 GitHub 是两步操作；任一失败都不会自动回滚另一侧，重试前先确认状态。

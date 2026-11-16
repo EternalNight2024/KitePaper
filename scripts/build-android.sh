@@ -19,11 +19,11 @@ fi
 echo "[1/4] 获取依赖..."
 flutter pub get
 
-echo "[2/4] 静态分析（非阻断）..."
-flutter analyze lib test || true
+echo "[2/4] 静态分析..."
+flutter analyze lib test
 
-echo "[3/4] 运行单元测试（非阻断）..."
-flutter test || true
+echo "[3/4] 运行单元测试..."
+flutter test
 
 echo "[4/4] 构建 Android Release (APK + AAB)..."
 flutter build apk --release

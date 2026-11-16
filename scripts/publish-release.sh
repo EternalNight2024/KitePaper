@@ -41,11 +41,15 @@ fi
 git tag "$TAG"
 git push origin "$TAG"
 
-gh release create "$TAG" \
-  --title "KitePaper $TAG" \
-  --notes "$RELEASE_NOTES" \
-  --latest \
-  --repo "${GITHUB_REPOSITORY}" || true
+if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+  echo "[WARN] Release $TAG 已存在，跳过创建，仅更新产物"
+else
+  gh release create "$TAG" \
+    --title "KitePaper $TAG" \
+    --notes "$RELEASE_NOTES" \
+    --latest \
+    --repo "${GITHUB_REPOSITORY}"
+fi
 
 echo ">>> 上传 Windows 产物..."
 if [ -f "dist/windows/kitepaper.zip" ]; then

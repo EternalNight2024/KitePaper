@@ -18,13 +18,16 @@ on:
 
 permissions:
   contents: write
-  id-token: write
 
 jobs:
   build-windows:
     name: Build Windows
     runs-on: windows-latest
     if: github.event_name != 'pull_request'
+    # 构建脚本是 bash，Windows runner 默认 shell 为 PowerShell，必须显式指定。
+    defaults:
+      run:
+        shell: bash
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -39,10 +42,10 @@ jobs:
         run: flutter pub get
 
       - name: Analyze
-        run: flutter analyze lib test || true
+        run: flutter analyze lib test
 
       - name: Run tests
-        run: flutter test || true
+        run: flutter test
 
       - name: Build Windows
         run: ./scripts/build-windows.sh
@@ -51,7 +54,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: kitepaper-windows
-          path: build/windows/x64/runner/Release/kitepaper.zip
+          path: build/windows/kitepaper.zip
           retention-days: 7
 
   build-android:
@@ -78,10 +81,10 @@ jobs:
         run: flutter pub get
 
       - name: Analyze
-        run: flutter analyze lib test || true
+        run: flutter analyze lib test
 
       - name: Run tests
-        run: flutter test || true
+        run: flutter test
 
       - name: Build Android APK + AAB
         run: ./scripts/build-android.sh
@@ -124,4 +127,4 @@ jobs:
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: ./scripts/publish-release.sh
+        run: ./scripts/publish-release.sh "${{ github.event.inputs.tag || '' }}" "${{ github.event.inputs.release_notes || '' }}"
