@@ -135,7 +135,7 @@ flutter build web           # 也可构建 apk / ios / linux / macos / windows
 | GitHub 镜像 | `https://github.com/EternalNight2024/KitePaper.git` | Release 发布目标 |
 
 - 本地构建：`./scripts/build-windows.sh`、`./scripts/build-android.sh`。两者都会先跑 analyze/test，失败即中止。
-- CI：`.github/workflows/build-release.yml` 在 push 到 `main` 时构建 Windows + Android，并创建 GitHub Release 上传产物（Windows zip、Android APK 与 AAB）。workflow_dispatch 可指定 tag 与 release notes。
+- CI：`.github/workflows/build-release.yml` **仅由手动 / 脚本触发**（`workflow_dispatch`），push 与 PR 不再触发构建。触发命令：`gh workflow run build-release.yml --repo EternalNight2024/KitePaper --ref main [-f tag=v1.0.1 -f release_notes='...']`。在 `main` 上触发时构建 Windows + Android 并创建 GitHub Release 上传产物（Windows zip、Android APK 与 AAB）；其他分支仅构建不发布。
 - 凭据：GitHub token 仅放本地 `.github_token`（已加入 `.gitignore`，**不得提交**）。`gh` 用 `gh auth login --with-token < .github_token` 配置；不要把 token 写进 remote URL 或仓库文件。
 
 注意：推送到 CNB 与发布到 GitHub 是两步操作；任一失败都不会自动回滚另一侧，重试前先确认状态。
